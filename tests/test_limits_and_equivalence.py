@@ -83,3 +83,61 @@ def test_short_circuit_still_skips_undefined_variables() -> None:
 
 def test_empty_expression_is_always_true() -> None:
     assert isinstance(compile_expression("   "), BoolLiteral)
+
+
+def test_references_finds_variables_matchers_and_fields() -> None:
+    from theaios.core.expressions import references
+
+    refs = references(
+        compile_expression(
+            'content matches pii and not (amount > $max or user.role in [$admin, "ops"]) '
+            'or note matches "injection"'
+        )
+    )
+    assert refs.variables == {"max", "admin"}
+    assert refs.matchers == {"pii", "injection"}
+    assert refs.fields == {"content", "amount", "user.role", "note"}  # matcher names excluded
+
+
+def test_references_handles_long_chains_without_recursion() -> None:
+    from theaios.core.expressions import references
+
+    refs = references(compile_expression(" or ".join(f"x == $v{i}" for i in range(500))))
+    assert len(refs.variables) == 500
+
+
+def test_numeric_strings_compare_as_numbers() -> None:
+    cap = compile_expression("amount > $max")
+    assert evaluate(cap, {"amount": "10000"}, variables={"max": 5000}) is True
+    assert evaluate(cap, {"amount": "600"}, variables={"max": 5000}) is False
+    assert evaluate(cap, {"amount": 10000}, variables={"max": "5000"}) is True
+    assert evaluate(cap, {"amount": " 10000.5 "}, variables={"max": 5000}) is True
+    assert evaluate(compile_expression('a < "9"'), {"a": "10"}) is False  # both numeric strings
+
+
+def test_number_against_non_number_raises() -> None:
+    cap = compile_expression("amount > 5000")
+    for bad in ["10,000", "abc", [9999], {"x": 1}, "nan", "inf"]:
+        with pytest.raises(ExpressionError, match="cannot order"):
+            evaluate(cap, {"amount": bad})
+
+
+def test_missing_and_plain_strings_unchanged() -> None:
+    assert evaluate(compile_expression("amount > 5000"), {}) is False
+    assert evaluate(compile_expression('name > "m"'), {"name": "zed"}) is True
+    assert evaluate(compile_expression('day >= "2026-11-01"'), {"day": "2026-11-09"}) is True
+
+
+def test_numeric_strings_equal_numbers_in_membership_and_equality() -> None:
+    blocked = compile_expression("account in $blocked")
+    assert evaluate(blocked, {"account": "1001"}, variables={"blocked": [1001, 1002]}) is True
+    assert evaluate(blocked, {"account": 1001}, variables={"blocked": ["1001"]}) is True
+    assert evaluate(blocked, {"account": "1003"}, variables={"blocked": [1001]}) is False
+    assert (
+        evaluate(compile_expression("a not in $b"), {"a": "1001"}, variables={"b": [1001]}) is False
+    )
+    assert evaluate(compile_expression("a == 5000"), {"a": "5000"}) is True
+    assert evaluate(compile_expression("a != 5000"), {"a": "5000.0"}) is False
+    assert evaluate(compile_expression('a == "1.0"'), {"a": "1"}) is False  # two strings: text
+    assert evaluate(compile_expression("a == 5000"), {"a": "abc"}) is False
+    assert evaluate(compile_expression("a == 1"), {"a": True}) is True  # unchanged

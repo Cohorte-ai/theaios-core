@@ -34,6 +34,7 @@ without recursion.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Protocol
@@ -525,9 +526,9 @@ def evaluate(
         right = _eval(node.right)
 
         if op == "==":
-            return left == right
+            return _equal(left, right)
         if op == "!=":
-            return left != right
+            return not _equal(left, right)
         if op == ">":
             return _compare(left, right) > 0
         if op == "<":
@@ -539,14 +540,14 @@ def evaluate(
 
         if op == "in":
             if isinstance(right, list):
-                return left in right
+                return any(_equal(left, item) for item in right)
             if isinstance(right, str) and isinstance(left, str):
                 return left in right
             return False
 
         if op == "not_in":
             if isinstance(right, list):
-                return left not in right
+                return not any(_equal(left, item) for item in right)
             if isinstance(right, str) and isinstance(left, str):
                 return left not in right
             return True
@@ -580,6 +581,41 @@ def evaluate(
     return _eval(ast)
 
 
+@dataclass(frozen=True)
+class References:
+    """Names an expression depends on, for validating a config before anything runs."""
+
+    variables: frozenset[str]
+    matchers: frozenset[str]
+    fields: frozenset[str]
+
+
+def references(ast: ASTNode) -> References:
+    """Every ``$variable``, matcher name (right side of ``matches``) and field an expression
+    uses. Walks the tree without evaluating it, iteratively (no recursion limit)."""
+    variables: set[str] = set()
+    matchers: set[str] = set()
+    fields: set[str] = set()
+    stack: list[object] = [ast]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, Variable):
+            variables.add(node.name)
+        elif isinstance(node, FieldAccess):
+            fields.add(".".join(node.parts))
+        elif isinstance(node, ListLiteral):
+            stack.extend(node.items)
+        elif isinstance(node, UnaryOp):
+            stack.append(node.operand)
+        elif isinstance(node, BinaryOp):
+            stack.append(node.left)
+            if node.op == "matches" and isinstance(node.right, (FieldAccess, StringLiteral)):
+                matchers.add(_extract_matcher_name(node.right))
+            else:
+                stack.append(node.right)
+    return References(frozenset(variables), frozenset(matchers), frozenset(fields))
+
+
 def _extract_matcher_name(node: object) -> str:
     """Extract matcher name from AST node (for the `matches` operator)."""
     if isinstance(node, FieldAccess):
@@ -600,14 +636,53 @@ def _resolve_field(data: dict[str, object], parts: tuple[str, ...]) -> object:
     return current
 
 
+def _as_number(value: object) -> float | int | None:
+    """A number, or a string that spells one (``"10000"``, ``" 12.5 "``); None otherwise."""
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return None
+        return number if math.isfinite(number) else None
+    return None
+
+
+def _short(value: object) -> str:
+    text = repr(value)
+    return text if len(text) <= 60 else text[:57] + "..."
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _equal(left: object, right: object) -> bool:
+    """Equality, where a number and a string that spells the same number are equal
+    (``"1001" == 1001``), consistent with ordering. Two strings still compare as text."""
+    mixed = (_is_number(left) and isinstance(right, str)) or (
+        _is_number(right) and isinstance(left, str)
+    )
+    if mixed:
+        ln, rn = _as_number(left), _as_number(right)
+        return ln is not None and rn is not None and ln == rn
+    return left == right
+
+
 def _compare(left: object, right: object) -> int:
-    """Compare two values, handling type mismatches gracefully."""
-    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        if left < right:
-            return -1
-        if left > right:
-            return 1
-        return 0
+    """Order two values. Numbers, and strings that spell numbers, compare as numbers, so
+    ``"10000" > 5000`` holds (tool-call arguments often arrive as strings). Comparing a number
+    with something that is not one raises ``ExpressionError`` instead of guessing; a missing
+    value (None) keeps its historical behaviour and compares as an empty string."""
+    if left is not None and right is not None:
+        ln, rn = _as_number(left), _as_number(right)
+        if ln is not None and rn is not None:
+            return (ln > rn) - (ln < rn)
+        if isinstance(left, (int, float)) or isinstance(right, (int, float)):
+            raise ExpressionError(
+                f"cannot order {_short(left)} and {_short(right)}: only one is a number"
+            )
     # String comparison
     left_str = str(left) if left is not None else ""
     right_str = str(right) if right is not None else ""
