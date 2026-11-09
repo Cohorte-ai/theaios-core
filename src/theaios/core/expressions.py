@@ -661,7 +661,10 @@ def _is_number(value: object) -> bool:
 def _equal(left: object, right: object) -> bool:
     """Equality, where a number and a string that spells the same number are equal
     (``"1001" == 1001``), consistent with ordering. Two strings still compare as text."""
-    if (_is_number(left) and isinstance(right, str)) or (_is_number(right) and isinstance(left, str)):
+    mixed = (_is_number(left) and isinstance(right, str)) or (
+        _is_number(right) and isinstance(left, str)
+    )
+    if mixed:
         ln, rn = _as_number(left), _as_number(right)
         return ln is not None and rn is not None and ln == rn
     return left == right

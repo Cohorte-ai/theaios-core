@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ordering a number against something that is not one (`"10,000"`, `"abc"`, a list) now raises
   `ExpressionError` instead of guessing. The libraries treat a rule that raises as matched (fail
   closed). A missing value (null) is unchanged.
+- `==`, `!=`, `in` and `not in` treat a number and a string that spells the same number as
+  equal (`"1001" == 1001`, `"1001" in [1001, 1002]`), so a blocklist of ids cannot be bypassed by
+  sending the id as a string. Two strings still compare as text (`"1.0" != "1"`).
 
 ## [0.1.0] - 2026-11-08
 

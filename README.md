@@ -36,7 +36,8 @@ suites pass unchanged against this package. The only difference: input over the 
 above now raises `ExpressionError` instead of failing with a Python `RecursionError`.
 
 Since 0.1.1, ordering comparisons treat strings that spell numbers as numbers (`"10000" > 5000`)
-and raise `ExpressionError` when only one side is a number.
+and raise `ExpressionError` when only one side is a number; `==`, `!=`, `in` and `not in`
+treat `"1001"` and `1001` as equal.
 
 ## License
 
