@@ -119,9 +119,33 @@ def main(argv: list[str] | None = None) -> int:
     if len(args) != 2 or args[0] != "verify":
         print("usage: python -m theaios.core.audit verify <file.jsonl>")
         return 2
-    intact, count = verify_chain(args[1])
+    path = Path(args[1])
+    # A missing log is not an intact one: deleting the whole file must not pass the check.
+    if not path.is_file():
+        print(f"error: {path} does not exist or is not a file")
+        return 2
+    if not _is_chained(path):
+        print(
+            f"error: {path} is not hash-chained (it was written without chain=True), "
+            "so it cannot be verified"
+        )
+        return 2
+    intact, count = verify_chain(path)
     print(f"{'intact' if intact else 'BROKEN'}: {count} entries verified")
     return 0 if intact else 1
+
+
+def _is_chained(path: Path) -> bool:
+    """Whether the first entry carries the chain fields."""
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    return True  # let verify_chain report the corruption
+                return isinstance(entry, dict) and "hash" in entry and "prev_hash" in entry
+    return True  # an existing empty file: verify_chain reports 0 entries
 
 
 if __name__ == "__main__":

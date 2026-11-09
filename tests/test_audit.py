@@ -49,3 +49,15 @@ def test_deleting_an_entry_breaks_the_chain(tmp_path: Path) -> None:
     lines = path.read_text().splitlines()
     path.write_text("\n".join([lines[0], lines[2]]) + "\n")
     assert verify_chain(path) == (False, 1)
+
+
+def test_cli_missing_file_is_an_error_not_intact(tmp_path: Path) -> None:
+    assert main(["verify", str(tmp_path / "deleted.jsonl")]) == 2
+    assert main(["verify", str(tmp_path)]) == 2
+
+
+def test_cli_unchained_log_is_reported_as_such(tmp_path: Path) -> None:
+    path = tmp_path / "plain.jsonl"
+    log = JsonlLog(path)
+    log.append({"event": "a"})
+    assert main(["verify", str(path)]) == 2

@@ -25,9 +25,19 @@ evaluate(rule, {"amount": 4800, "currency": "EUR"})  # True
 evaluating it, so a library can reject a config that names something undefined (a typo in a
 deny rule) when it loads, not when the rule is silently skipped at runtime.
 
-```bash
-python -m theaios.core.audit verify .guardrails_audit/audit.jsonl
+```python
+from theaios.core.audit import JsonlLog
+
+log = JsonlLog("decisions.jsonl", chain=True)   # each entry carries prev_hash and hash
+log.append({"agent": "finbot", "action": "pay", "decision": "deny"})
 ```
+
+```bash
+python -m theaios.core.audit verify decisions.jsonl   # exit 0 intact, 1 broken, 2 cannot verify
+```
+
+Only hash-chained logs can be verified: a missing file or a log written without `chain=True`
+exits 2 with the reason. The guardrails and agent-auth audit logs are not chained yet.
 
 ## Compatibility
 

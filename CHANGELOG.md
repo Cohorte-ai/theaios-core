@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `==`, `!=`, `in` and `not in` treat a number and a string that spells the same number as
   equal (`"1001" == 1001`, `"1001" in [1001, 1002]`), so a blocklist of ids cannot be bypassed by
   sending the id as a string. Two strings still compare as text (`"1.0" != "1"`).
+- `python -m theaios.core.audit verify` reported a missing file as `intact` (exit 0), so
+  deleting a whole log passed the check, and reported a log written without `chain=True` as
+  `BROKEN`. Both now exit 2 with the reason. The README example now verifies a chained log.
 
 ## [0.1.0] - 2026-11-08
 
