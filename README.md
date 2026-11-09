@@ -35,6 +35,9 @@ The expression language is the one the four libraries already used; their existi
 suites pass unchanged against this package. The only difference: input over the limits
 above now raises `ExpressionError` instead of failing with a Python `RecursionError`.
 
+Since 0.1.1, ordering comparisons treat strings that spell numbers as numbers (`"10000" > 5000`)
+and raise `ExpressionError` when only one side is a number.
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).

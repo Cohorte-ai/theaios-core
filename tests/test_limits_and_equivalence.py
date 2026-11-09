@@ -104,3 +104,25 @@ def test_references_handles_long_chains_without_recursion() -> None:
 
     refs = references(compile_expression(" or ".join(f"x == $v{i}" for i in range(500))))
     assert len(refs.variables) == 500
+
+
+def test_numeric_strings_compare_as_numbers() -> None:
+    cap = compile_expression("amount > $max")
+    assert evaluate(cap, {"amount": "10000"}, variables={"max": 5000}) is True
+    assert evaluate(cap, {"amount": "600"}, variables={"max": 5000}) is False
+    assert evaluate(cap, {"amount": 10000}, variables={"max": "5000"}) is True
+    assert evaluate(cap, {"amount": " 10000.5 "}, variables={"max": 5000}) is True
+    assert evaluate(compile_expression('a < "9"'), {"a": "10"}) is False  # both numeric strings
+
+
+def test_number_against_non_number_raises() -> None:
+    cap = compile_expression("amount > 5000")
+    for bad in ["10,000", "abc", [9999], {"x": 1}, "nan", "inf"]:
+        with pytest.raises(ExpressionError, match="cannot order"):
+            evaluate(cap, {"amount": bad})
+
+
+def test_missing_and_plain_strings_unchanged() -> None:
+    assert evaluate(compile_expression("amount > 5000"), {}) is False
+    assert evaluate(compile_expression('name > "m"'), {"name": "zed"}) is True
+    assert evaluate(compile_expression('day >= "2026-11-01"'), {"day": "2026-11-09"}) is True

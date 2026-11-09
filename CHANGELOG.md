@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expression uses, found without evaluating it. The libraries use it to reject configs that
   reference an undefined `$variable` or matcher at load time.
 
+### Fixed
+
+- Ordering comparisons (`>`, `<`, `>=`, `<=`) between a number and a string that spells a
+  number now compare numerically: `"10000" > 5000` is true. Before, the number was turned into
+  a string and compared character by character, so a cap like `amount > $max_transfer` let a
+  string amount of `"10000"` through. Two numeric strings also compare as numbers.
+- Ordering a number against something that is not one (`"10,000"`, `"abc"`, a list) now raises
+  `ExpressionError` instead of guessing. The libraries treat a rule that raises as matched (fail
+  closed). A missing value (null) is unchanged.
+
 ## [0.1.0] - 2026-11-08
 
 ### Added

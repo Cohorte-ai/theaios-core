@@ -34,6 +34,7 @@ without recursion.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Protocol
@@ -635,14 +636,37 @@ def _resolve_field(data: dict[str, object], parts: tuple[str, ...]) -> object:
     return current
 
 
+def _as_number(value: object) -> float | int | None:
+    """A number, or a string that spells one (``"10000"``, ``" 12.5 "``); None otherwise."""
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        try:
+            number = float(value.strip())
+        except ValueError:
+            return None
+        return number if math.isfinite(number) else None
+    return None
+
+
+def _short(value: object) -> str:
+    text = repr(value)
+    return text if len(text) <= 60 else text[:57] + "..."
+
+
 def _compare(left: object, right: object) -> int:
-    """Compare two values, handling type mismatches gracefully."""
-    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        if left < right:
-            return -1
-        if left > right:
-            return 1
-        return 0
+    """Order two values. Numbers, and strings that spell numbers, compare as numbers, so
+    ``"10000" > 5000`` holds (tool-call arguments often arrive as strings). Comparing a number
+    with something that is not one raises ``ExpressionError`` instead of guessing; a missing
+    value (None) keeps its historical behaviour and compares as an empty string."""
+    if left is not None and right is not None:
+        ln, rn = _as_number(left), _as_number(right)
+        if ln is not None and rn is not None:
+            return (ln > rn) - (ln < rn)
+        if isinstance(left, (int, float)) or isinstance(right, (int, float)):
+            raise ExpressionError(
+                f"cannot order {_short(left)} and {_short(right)}: only one is a number"
+            )
     # String comparison
     left_str = str(left) if left is not None else ""
     right_str = str(right) if right is not None else ""
