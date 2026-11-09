@@ -526,9 +526,9 @@ def evaluate(
         right = _eval(node.right)
 
         if op == "==":
-            return left == right
+            return _equal(left, right)
         if op == "!=":
-            return left != right
+            return not _equal(left, right)
         if op == ">":
             return _compare(left, right) > 0
         if op == "<":
@@ -540,14 +540,14 @@ def evaluate(
 
         if op == "in":
             if isinstance(right, list):
-                return left in right
+                return any(_equal(left, item) for item in right)
             if isinstance(right, str) and isinstance(left, str):
                 return left in right
             return False
 
         if op == "not_in":
             if isinstance(right, list):
-                return left not in right
+                return not any(_equal(left, item) for item in right)
             if isinstance(right, str) and isinstance(left, str):
                 return left not in right
             return True
@@ -652,6 +652,19 @@ def _as_number(value: object) -> float | int | None:
 def _short(value: object) -> str:
     text = repr(value)
     return text if len(text) <= 60 else text[:57] + "..."
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _equal(left: object, right: object) -> bool:
+    """Equality, where a number and a string that spells the same number are equal
+    (``"1001" == 1001``), consistent with ordering. Two strings still compare as text."""
+    if (_is_number(left) and isinstance(right, str)) or (_is_number(right) and isinstance(left, str)):
+        ln, rn = _as_number(left), _as_number(right)
+        return ln is not None and rn is not None and ln == rn
+    return left == right
 
 
 def _compare(left: object, right: object) -> int:

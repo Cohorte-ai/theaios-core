@@ -126,3 +126,18 @@ def test_missing_and_plain_strings_unchanged() -> None:
     assert evaluate(compile_expression("amount > 5000"), {}) is False
     assert evaluate(compile_expression('name > "m"'), {"name": "zed"}) is True
     assert evaluate(compile_expression('day >= "2026-11-01"'), {"day": "2026-11-09"}) is True
+
+
+def test_numeric_strings_equal_numbers_in_membership_and_equality() -> None:
+    blocked = compile_expression("account in $blocked")
+    assert evaluate(blocked, {"account": "1001"}, variables={"blocked": [1001, 1002]}) is True
+    assert evaluate(blocked, {"account": 1001}, variables={"blocked": ["1001"]}) is True
+    assert evaluate(blocked, {"account": "1003"}, variables={"blocked": [1001]}) is False
+    assert (
+        evaluate(compile_expression("a not in $b"), {"a": "1001"}, variables={"b": [1001]}) is False
+    )
+    assert evaluate(compile_expression("a == 5000"), {"a": "5000"}) is True
+    assert evaluate(compile_expression("a != 5000"), {"a": "5000.0"}) is False
+    assert evaluate(compile_expression('a == "1.0"'), {"a": "1"}) is False  # two strings: text
+    assert evaluate(compile_expression("a == 5000"), {"a": "abc"}) is False
+    assert evaluate(compile_expression("a == 1"), {"a": True}) is True  # unchanged
