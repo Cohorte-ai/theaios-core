@@ -21,6 +21,10 @@ rule = compile_expression('amount > 1000 and currency in ["EUR", "USD"]')
 evaluate(rule, {"amount": 4800, "currency": "EUR"})  # True
 ```
 
+`references(rule)` lists the `$variables`, matchers and fields an expression uses without
+evaluating it, so a library can reject a config that names something undefined (a typo in a
+deny rule) when it loads, not when the rule is silently skipped at runtime.
+
 ```bash
 python -m theaios.core.audit verify .guardrails_audit/audit.jsonl
 ```

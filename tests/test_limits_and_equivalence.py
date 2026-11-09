@@ -83,3 +83,24 @@ def test_short_circuit_still_skips_undefined_variables() -> None:
 
 def test_empty_expression_is_always_true() -> None:
     assert isinstance(compile_expression("   "), BoolLiteral)
+
+
+def test_references_finds_variables_matchers_and_fields() -> None:
+    from theaios.core.expressions import references
+
+    refs = references(
+        compile_expression(
+            'content matches pii and not (amount > $max or user.role in [$admin, "ops"]) '
+            'or note matches "injection"'
+        )
+    )
+    assert refs.variables == {"max", "admin"}
+    assert refs.matchers == {"pii", "injection"}
+    assert refs.fields == {"content", "amount", "user.role", "note"}  # matcher names excluded
+
+
+def test_references_handles_long_chains_without_recursion() -> None:
+    from theaios.core.expressions import references
+
+    refs = references(compile_expression(" or ".join(f"x == $v{i}" for i in range(500))))
+    assert len(refs.variables) == 500

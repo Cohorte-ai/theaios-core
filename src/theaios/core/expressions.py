@@ -580,6 +580,41 @@ def evaluate(
     return _eval(ast)
 
 
+@dataclass(frozen=True)
+class References:
+    """Names an expression depends on, for validating a config before anything runs."""
+
+    variables: frozenset[str]
+    matchers: frozenset[str]
+    fields: frozenset[str]
+
+
+def references(ast: ASTNode) -> References:
+    """Every ``$variable``, matcher name (right side of ``matches``) and field an expression
+    uses. Walks the tree without evaluating it, iteratively (no recursion limit)."""
+    variables: set[str] = set()
+    matchers: set[str] = set()
+    fields: set[str] = set()
+    stack: list[object] = [ast]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, Variable):
+            variables.add(node.name)
+        elif isinstance(node, FieldAccess):
+            fields.add(".".join(node.parts))
+        elif isinstance(node, ListLiteral):
+            stack.extend(node.items)
+        elif isinstance(node, UnaryOp):
+            stack.append(node.operand)
+        elif isinstance(node, BinaryOp):
+            stack.append(node.left)
+            if node.op == "matches" and isinstance(node.right, (FieldAccess, StringLiteral)):
+                matchers.add(_extract_matcher_name(node.right))
+            else:
+                stack.append(node.right)
+    return References(frozenset(variables), frozenset(matchers), frozenset(fields))
+
+
 def _extract_matcher_name(node: object) -> str:
     """Extract matcher name from AST node (for the `matches` operator)."""
     if isinstance(node, FieldAccess):
